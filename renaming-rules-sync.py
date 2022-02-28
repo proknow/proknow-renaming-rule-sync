@@ -53,6 +53,13 @@ def fail(skk, msg=None):
 ########################################
 # Utilities
 
+def find_synonym_rule(items, value):
+    for item in items:
+        rule = item["rule"]
+        if rule["value"] == value and rule["type"] == "synonyms":
+            return item
+    return None
+
 def is_rule_equal(a, b):
     if a["type"] != b["type"]:
         return False
@@ -148,9 +155,9 @@ print_magenta("Querying Rules from ProKnow...")
 
 # Query existing rules
 _, items = pk.requestor.get('/renaming/rules')
-desired_items = {}
+desired_items = []
 for rule in items:
-    desired_items[rule["value"]] = {
+    desired_items.append({
         "rule": {
             "id": rule["id"],
             "type": rule["type"],
@@ -158,23 +165,22 @@ for rule in items:
             "value": rule["value"]
         },
         "state": "unknown"
-    }
+    })
 
 # Determine new and updated rules
 for value in rules:
     rule = rules[value]
-    if value in desired_items:
-        rule["id"] = desired_items[value]["rule"]["id"]
-        if not is_rule_equal(rule, desired_items[value]["rule"]):
-            desired_items[value]["rule"] = rule
-            desired_items[value]["state"] = "updated"
-        else:
-            desired_items[value]["state"] = "unchanged"
-    else:
-        desired_items[value] = {
+    found = find_synonym_rule(desired_items, value)
+    if found is None:
+        desired_items.append({
             "rule": rule,
             "state": "created"
-        }
+        })
+    elif not is_rule_equal(rule, found["rule"]):
+        found["rule"]["criteria"] = rule["criteria"]
+        found["state"] = "updated"
+    else:
+        found["state"] = "unchanged"
 
 
 ########################################
@@ -187,8 +193,7 @@ body = []
 created = 0
 updated = 0
 unknown = []
-for value in desired_items:
-    item = desired_items[value]
+for item in desired_items:
     body.append(item["rule"])
     if item["state"] == "created":
         created += 1
